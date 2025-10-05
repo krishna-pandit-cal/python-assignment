@@ -223,20 +223,34 @@ def search_for_secrets_in_cf(name, props, path, issues):
 def check_terraform(parsed, path, issues):
     if not isinstance(parsed, dict):
         return
-    # Resources are under 'resource' key
-    resources = parsed.get("resource", {}) or {}
-    # resources structure: { "aws_security_group": { "name": { ... } } }
-    for rtype, named in resources.items():
-        for rname, body in named.items():
-            if rtype in ("aws_security_group", "aws_security_group_rule"):
-                check_tf_security_group(rtype, rname, body, path, issues)
-            if rtype in ("aws_s3_bucket",):
-                check_tf_s3_bucket(rtype, rname, body, path, issues)
-            if rtype in ("aws_iam_policy", "aws_iam_role"):
-                check_tf_iam(rtype, rname, body, path, issues)
-            # tags commonly in 'tags' map
-            check_missing_tags_tf(rtype, rname, body, path, issues)
-            search_for_secrets_in_tf(rtype, rname, body, path, issues)
+
+    resources = parsed.get("resource", [])
+    # Normalize to list form
+    if not isinstance(resources, list):
+        resources = [resources]
+
+    for resource_block in resources:
+        if not isinstance(resource_block, dict):
+            continue
+
+        for rtype, named in resource_block.items():
+            if not isinstance(named, dict):
+                continue
+
+            for rname, body in named.items():
+                if not isinstance(body, dict):
+                    continue
+
+                if rtype in ("aws_security_group", "aws_security_group_rule"):
+                    check_tf_security_group(rtype, rname, body, path, issues)
+                if rtype in ("aws_s3_bucket",):
+                    check_tf_s3_bucket(rtype, rname, body, path, issues)
+                if rtype in ("aws_iam_policy", "aws_iam_role"):
+                    check_tf_iam(rtype, rname, body, path, issues)
+
+                # generic checks
+                check_missing_tags_tf(rtype, rname, body, path, issues)
+                search_for_secrets_in_tf(rtype, rname, body, path, issues)
 
 def check_tf_security_group(rtype, rname, body, path, issues):
     # body may contain ingress/egress blocks
